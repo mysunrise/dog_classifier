@@ -37,7 +37,7 @@ val_loader = torch.utils.data.DataLoader(
     batch_size=64, shuffle=False)
 
 use_gpu = torch.cuda.is_available()
-print_frequence = 20
+print_frequency = 20
 
 original_model = models.vgg19(pretrained=True)
 '''
@@ -76,14 +76,14 @@ class MyVgg19(nn.Module):
 
 num_classes = 100
 model = MyVgg19(original_model, num_classes)
+criterion = nn.CrossEntropyLoss()
 if use_gpu:
     model.cuda()
+    criterion.cuda()
 # print(list(list(model.classifier.children())[0].parameters()))
 # print(list(list(model.classifier.children())[6].named_parameters()))
 # print(list(original_model.classifier.children())[6])
 
-
-criterion = nn.CrossEntropyLoss()
 '''
 for name, param in model.named_parameters():
     if name not in list(list(model.classifier.children())[6].named_parameters()):
@@ -117,12 +117,7 @@ def main():
         prec1 = test_model(model, val_loader, criterion)
         is_best = prec1 > best_prec1
         best_prec1 = max(prec1, best_prec1)
-        save_checkpoint({
-            'epoch': epoch,
-            'state_dict': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'best_prec1': best_prec1
-        }, is_best)
+        save_checkpoint(model, epoch, is_best)
 
 
 def exp_lr_scheduler(optimizer, epoch, init_lr=0.01, lr_decay_epoch=40):
@@ -162,7 +157,7 @@ def train_model(model, train_loader, criterion, optimizer, lr_scheduler, epoch):
         batch_time.update(time.time() - since)
         since = time.time()
 
-        if idx % print_frequence == 0:
+        if idx % print_frequency == 0:
             print('Epoch: [{0}] [{1}/{2}]\t'
                   'Time {batch_time.val: .3f} {batch_time.avg: .3f}\t'
                   'Loss {loss.val: .4f} {loss.avg: .4f}\t'
@@ -192,7 +187,7 @@ def test_model(model, val_loader, criterion):
         batch_time.update(time.time() - since)
         since = time.time()
 
-        if idx % print_frequence == 0:
+        if idx % print_frequency == 0:
             print('Test: [{0}/{1}]\t'
                   'Time {batch_time.val: .3f} {batch_time.avg: .3f}\t'
                   'Loss {loss.val: .4f} {loss.avg: .4f}\t'
@@ -222,10 +217,12 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def save_checkpoint(state, is_best, filename='./result/checkpoint.pth.tar'):
-    torch.save(state, filename)
+def save_checkpoint(model, epoch, is_best):
+    model_out_path = './result/model_epoch_{}.pth'.format(epoch)
+    torch.save(model, model_out_path)
+    print('checkpoint saved to {}'.format(model_out_path))
     if is_best:
-        shutil.copy(filename, './result/model_best.pth.tar')
+        shutil.copy(model_out_path, './result/model_best.pth')
 
 
 if __name__ == '__main__':
