@@ -1,5 +1,5 @@
 # dog_classifier
-This project aims to solve the problem described in http://js.baidu.com/. The contest aims to classifier the pet dog.
+This project aims to solve the problem described in http://js.baidu.com/. The contest aims to classify the pet dog.
 
 For a baseline, we use VGG19 or ResNet152 as the pretrained model.
 We can fine-tune the model by retraining the last fully connected layer and the convolutional layers.
