@@ -1,16 +1,13 @@
 from __future__ import print_function
-#from __future__ import division
+from __future__ import division
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.autograd import Variable
 from torch import optim
 
-import torchvision
-from torchvision import transforms
-
 import time
+import collections
 
 class AverageMeter(object):
 	def __init__(self, func1 = None, func2 = None):
@@ -35,7 +32,7 @@ class AverageMeter(object):
 
 class NetState(object):
 	def __init__(self):
-		self.state = {}
+		self.state = collections.OrderedDict()
 
 	def reset(self):
 		for i in self.state.values():
@@ -43,28 +40,30 @@ class NetState(object):
 
 	def show(self):
 		for i in self.state:
-			print(i + ': val: ' + '%.3f'%self.state[i].val + ' avg: ' + '%.3f'%self.state[i].avg)
-
-	def update_one(self, name, val, n=1):
-		self.state[name].update(val, n)
+			print(i + ' val: ' + '%.3f' % self.state[i].val + 
+				' avg: ' + '%.3f' % self.state[i].avg)
 
 	def add(self, name, func1, func2):
 		self.state[name] = AverageMeter(func1, func2)
 
+	def remove(self, name):
+		del self.state[name]
+
 	def update(self, net, x, y):
 		for name in self.state:
-			self.update_one(name, self.state[name].func1(net, x, y), self.state[name].func2(net, x, y))
+			self.state[name].update(self.state[name].func1(net, x, y), 
+									self.state[name].func2(net, x, y))
 
 class network(nn.Module):
 	def __init__(self, features, classifier, criterion,
 					   train_features = True, train_classifier = True,
-					   init_lr = 0.01, lr_descending_rate = 0.1, lr_decay_epoch = 5):
+					   lr = 0.01, lr_descending_rate = 0, lr_decay_epoch = 0):
 		super(network, self).__init__()
 		self.features = nn.Sequential(*features)
 		self.classifier = nn.Sequential(*classifier)
 		self.criterion = criterion
-		self.optimizer = optim.SGD(self.classifier.parameters(), lr = init_lr, momentum = 0.9)
-		self.init_lr = init_lr
+		self.optimizer = optim.SGD(self.classifier.parameters(), lr = lr, momentum = 0.9)
+		self.lr = lr
 		self.lr_descending_rate = lr_descending_rate
 		self.lr_decay_epoch = lr_decay_epoch
 
@@ -83,10 +82,14 @@ class network(nn.Module):
 				for j in i.parameters():
 					j.requires_grad = False
 
-		self.state.add('time', lambda net, x, y: time.time() - net.time, lambda net, x, y: 1)
-		self.state.add('loss', lambda net, x, y: net.loss.data[0], lambda net, x, y: net.batch_size)
+		self.state.add('time', 
+			lambda net, x, y: time.time() - net.time, 
+			lambda net, x, y: 1)
+		self.state.add('loss', 
+			lambda net, x, y: net.loss.data[0], 
+			lambda net, x, y: net.batch_size)
 		self.state.add('top1', 
-			lambda net, x, y: torch.sum(torch.max(net.y_, 1)[1] == y).data[0] * 1.0 / net.batch_size,
+			lambda net, x, y: torch.sum(torch.max(net.y_, 1)[1] == y).data[0] / net.batch_size,
 			lambda net, x, y: net.batch_size)
 
 	def forward(self, x):
@@ -95,10 +98,10 @@ class network(nn.Module):
 		x = self.classifier(x)
 		return x
 
-	def set_lr(self, init_lr, lr_descending_rate, lr_decay_epoch):
+	def set_lr(self, lr, lr_descending_rate, lr_decay_epoch):
 		for param_group in self.optimizer.param_groups:
-			param_group['lr'] = init_lr
-		self.init_lr = init_lr
+			param_group['lr'] = lr
+		self.lr = lr
 		self.lr_descending_rate = lr_descending_rate
 		self.lr_decay_epoch = lr_decay_epoch
 
@@ -144,9 +147,9 @@ class network(nn.Module):
 		print('\nTesting complete')
 
 	def exp_lr_scheduler(self, epoch):
-		if epoch != 0 and epoch % self.lr_decay_epoch == 0:
-			self.init_lr *= self.lr_descending_rate
+		if self.lr_descending_rate > 0 and epoch != 0 and epoch % self.lr_decay_epoch == 0:
+			self.lr *= self.lr_descending_rate
 			for param_group in self.optimizer.param_groups:
-				param_group['lr'] = self.init_lr
-			print('Learning rate is set to {}, epoch {}'.format(self.init_lr, epoch))
+				param_group['lr'] = self.lr
+			print('\nLearning rate is set to {}'.format(self.lr))
 
